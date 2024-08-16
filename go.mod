@@ -1,4 +1,4 @@
-module kcphysics/dataframe
+module github.com/kcphysics/dataframe
 
 go 1.21.5
 
