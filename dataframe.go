@@ -2,6 +2,7 @@ package dataframe
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"slices"
@@ -385,5 +386,6 @@ func (d Dataframe) WriteCSV(filename string) error {
 	}
 	defer f.Close()
 	f.WriteString(table.Render())
+	log.Println("Something")
 	return nil
 }
