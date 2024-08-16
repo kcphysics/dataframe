@@ -2,9 +2,12 @@ package dataframe
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
+
+	"github.com/jedib0t/go-pretty/table"
 )
 
 // Dataframe is a structure that stores data in a variety of formats
@@ -274,4 +277,113 @@ func New() *Dataframe {
 		columnTypes:   make(map[string]reflect.Kind),
 		columnOrder:   []string{},
 	}
+}
+
+func (d Dataframe) createHeader(columnCount int) []interface{} {
+	var row []interface{}
+	for _, columnName := range d.columnOrder[:columnCount] {
+		row = append(row, columnName)
+	}
+	return row
+}
+
+func (d Dataframe) createRowFromNdx(ndx, columnCount int) ([]interface{}, error) {
+	var row []interface{}
+	for _, columnName := range d.columnOrder[:columnCount] {
+		colType := d.columnTypes[columnName]
+		switch colType {
+		case reflect.String:
+			col := d.stringColumns[columnName]
+			val, err := col.GetValueAtIndex(ndx)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, val)
+		case reflect.Int:
+			col := d.intColumns[columnName]
+			val, err := col.GetValueAtIndex(ndx)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, val)
+		case reflect.Int64:
+			col := d.bigIntColumns[columnName]
+			val, err := col.GetValueAtIndex(ndx)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, val)
+		case reflect.Float64:
+			col := d.floatColumns[columnName]
+			val, err := col.GetValueAtIndex(ndx)
+			if err != nil {
+				return nil, err
+			}
+			row = append(row, val)
+		default:
+			return nil, UnsupportedType{colType}
+		}
+	}
+	return row, nil
+}
+
+// Table will assemble a go-pretty table.  If there is
+// an error during index lookup, it will return an error.  This takes
+// the number of columns and rows to show.  If you give 0 or a negative
+// number, this will print the entire dataframe
+func (d Dataframe) Table(columnCount, rowCount int) (table.Writer, error) {
+	columnStop := columnCount
+	if columnCount <= 0 {
+		columnStop = len(d.columnOrder)
+	}
+	rowStop := rowCount
+	if rowCount <= 0 {
+		rowStop = d.Length()
+	}
+	t := table.NewWriter()
+	t.SetStyle(table.StyleBold)
+	t.AppendHeader(d.createHeader(columnStop))
+	for i := 0; i < rowStop; i++ {
+		row, err := d.createRowFromNdx(i, columnStop)
+		if err != nil {
+			return nil, err
+		}
+		t.AppendRow(row)
+	}
+	return t, nil
+}
+
+// Length will return the number of rows of the dataframe
+func (d Dataframe) Length() int {
+	return d.numberRows
+}
+
+// String is the stringer interface so it can be printed
+func (d Dataframe) String() string {
+	returnString := ""
+	returnString += fmt.Sprintf("Number of Columns: %d\n", len(d.columnOrder))
+	returnString += fmt.Sprintf("Number of Rows:    %d\n", d.numberRows)
+	table, err := d.Table(10, 10)
+	if err != nil {
+		returnString += fmt.Sprintf("Cannot Print Table: %s\n", err)
+		return returnString
+	}
+	returnString += table.Render()
+	return returnString
+}
+
+// WriteCSV is a function that takes a filename and returns an error
+// if the file cannot be written.
+func (d Dataframe) WriteCSV(filename string) error {
+	table, err := d.Table(0, 0)
+	if err != nil {
+		return fmt.Errorf("error during table construction: %w", err)
+	}
+	f, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("could not open file %s for writing: %w", filename, err)
+	}
+	defer f.Close()
+	f.WriteString(table.Render())
+	return nil
 }
