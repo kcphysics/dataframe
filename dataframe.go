@@ -375,7 +375,7 @@ func (d Dataframe) String() string {
 	returnString := ""
 	returnString += fmt.Sprintf("Number of Columns: %d\n", len(d.columnOrder))
 	returnString += fmt.Sprintf("Number of Rows:    %d\n", d.numberRows)
-	table, err := d.Table(min(10, d.numberRows), min(10, len(d.columnOrder)-1))
+	table, err := d.Table(getMin(10, d.numberRows), getMin(10, len(d.columnOrder)))
 	if err != nil {
 		returnString += fmt.Sprintf("Cannot Print Table: %s\n", err)
 		return returnString

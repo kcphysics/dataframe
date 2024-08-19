@@ -36,3 +36,10 @@ func getBoundsForFilter(operation FilterType, ndx, length int) (int, int) {
 	}
 	return -1, -1
 }
+
+func getMin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
