@@ -199,3 +199,19 @@ func TestColumnSlicing(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateColumnAndAddValues(t *testing.T) {
+	col, err := NewColumn("TestColumn", []string{})
+	if err != nil {
+		t.Fatalf("cannot create column: %s", err)
+		return
+	}
+	if col.Length() != 0 {
+		t.Errorf("expected length 0 for test column, but found %d", col.Length())
+		return
+	}
+	col.AppendValue("Another Value")
+	if col.Length() != 1 {
+		t.Errorf("expected length of 1 for test column, but found %d", col.Length())
+	}
+}

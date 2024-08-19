@@ -15,10 +15,10 @@ import (
 // name, and actual data.  The Dataframe must have all columns of the
 // same length
 type Dataframe struct {
-	intColumns    map[string]Column[int]
-	floatColumns  map[string]Column[float64]
-	bigIntColumns map[string]Column[int64]
-	stringColumns map[string]Column[string]
+	intColumns    map[string]*Column[int]
+	floatColumns  map[string]*Column[float64]
+	bigIntColumns map[string]*Column[int64]
+	stringColumns map[string]*Column[string]
 	columnTypes   map[string]reflect.Kind
 	columnOrder   []string
 	numberRows    int
@@ -91,7 +91,7 @@ func (d Dataframe) GetBigIntValue(columnName string, ndx int) (int64, error) {
 	if ndx < 0 || ndx > d.numberRows-1 {
 		return -1, IndexOutOfBounds{columnName, ndx, d.numberRows}
 	}
-	if d.columnTypes[columnName] != reflect.Int {
+	if d.columnTypes[columnName] != reflect.Int64 {
 		return -1, WrongColumnTypeError{columnName, reflect.Int64, d.columnTypes[columnName]}
 	}
 	column := d.bigIntColumns[columnName]
@@ -107,7 +107,7 @@ func (d Dataframe) GetStringValue(columnName string, ndx int) (string, error) {
 	if ndx < 0 || ndx > d.numberRows-1 {
 		return "", IndexOutOfBounds{columnName, ndx, d.numberRows}
 	}
-	if d.columnTypes[columnName] != reflect.Int {
+	if d.columnTypes[columnName] != reflect.String {
 		return "", WrongColumnTypeError{columnName, reflect.String, d.columnTypes[columnName]}
 	}
 	column := d.stringColumns[columnName]
@@ -123,7 +123,7 @@ func (d Dataframe) GetFloatValue(columnName string, ndx int) (float64, error) {
 	if ndx < 0 || ndx > d.numberRows-1 {
 		return -1, IndexOutOfBounds{columnName, ndx, d.numberRows}
 	}
-	if d.columnTypes[columnName] != reflect.Int {
+	if d.columnTypes[columnName] != reflect.Float64 {
 		return -1, WrongColumnTypeError{columnName, reflect.Float64, d.columnTypes[columnName]}
 	}
 	column := d.floatColumns[columnName]
@@ -143,7 +143,7 @@ func (d *Dataframe) AddIntColumn(col Column[int]) error {
 		return ColumnAlreadyExists{col.ColumnName}
 	}
 	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.intColumns[col.ColumnName] = col
+	d.intColumns[col.ColumnName] = &col
 	d.columnTypes[col.ColumnName] = col.ColumnType
 	return d.IsValid()
 }
@@ -161,7 +161,7 @@ func (d *Dataframe) AddBigIntColumn(col Column[int64]) error {
 		return ColumnAlreadyExists{col.ColumnName}
 	}
 	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.bigIntColumns[col.ColumnName] = col
+	d.bigIntColumns[col.ColumnName] = &col
 	d.columnTypes[col.ColumnName] = col.ColumnType
 	return d.IsValid()
 }
@@ -179,7 +179,7 @@ func (d *Dataframe) AddStringColumn(col Column[string]) error {
 		return ColumnAlreadyExists{col.ColumnName}
 	}
 	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.stringColumns[col.ColumnName] = col
+	d.stringColumns[col.ColumnName] = &col
 	d.columnTypes[col.ColumnName] = col.ColumnType
 	return d.IsValid()
 }
@@ -197,30 +197,42 @@ func (d *Dataframe) AddFloatColumn(col Column[float64]) error {
 		return ColumnAlreadyExists{col.ColumnName}
 	}
 	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.floatColumns[col.ColumnName] = col
+	d.floatColumns[col.ColumnName] = &col
 	d.columnTypes[col.ColumnName] = col.ColumnType
 	return d.IsValid()
 }
 
 // IsValid determines if all columns are the same length, returning
 // an error if they are not all the same length
-func (d Dataframe) IsValid() error {
+func (d *Dataframe) IsValid() error {
 	for _, col := range d.intColumns {
+		if d.numberRows == 0 {
+			d.numberRows = col.Length()
+		}
 		if col.Length() != d.numberRows {
 			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
 		}
 	}
 	for _, col := range d.floatColumns {
+		if d.numberRows == 0 {
+			d.numberRows = col.Length()
+		}
 		if col.Length() != d.numberRows {
 			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
 		}
 	}
 	for _, col := range d.bigIntColumns {
+		if d.numberRows == 0 {
+			d.numberRows = col.Length()
+		}
 		if col.Length() != d.numberRows {
 			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
 		}
 	}
 	for _, col := range d.stringColumns {
+		if d.numberRows == 0 {
+			d.numberRows = col.Length()
+		}
 		if col.Length() != d.numberRows {
 			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
 		}
@@ -270,10 +282,10 @@ func (d *Dataframe) ParseValue(columnName, value string) error {
 func New() *Dataframe {
 	return &Dataframe{
 		numberRows:    0,
-		intColumns:    make(map[string]Column[int]),
-		stringColumns: make(map[string]Column[string]),
-		bigIntColumns: make(map[string]Column[int64]),
-		floatColumns:  make(map[string]Column[float64]),
+		intColumns:    make(map[string]*Column[int]),
+		stringColumns: make(map[string]*Column[string]),
+		bigIntColumns: make(map[string]*Column[int64]),
+		floatColumns:  make(map[string]*Column[float64]),
 		columnTypes:   make(map[string]reflect.Kind),
 		columnOrder:   []string{},
 	}
@@ -363,13 +375,30 @@ func (d Dataframe) String() string {
 	returnString := ""
 	returnString += fmt.Sprintf("Number of Columns: %d\n", len(d.columnOrder))
 	returnString += fmt.Sprintf("Number of Rows:    %d\n", d.numberRows)
-	table, err := d.Table(10, 10)
+	table, err := d.Table(min(10, d.numberRows), min(10, len(d.columnOrder)-1))
 	if err != nil {
 		returnString += fmt.Sprintf("Cannot Print Table: %s\n", err)
 		return returnString
 	}
 	returnString += table.Render()
 	return returnString
+}
+
+// Names is a function that will return the names of the dataframe
+// in order
+func (d Dataframe) Names() []string {
+	return d.columnOrder
+}
+
+// GetColumnType takes a column name (string) and returns the type of that
+// column.  This is useful for determining what function to use to grab a
+// Column with.  If the Column doesn't exist, it returns a MissingColumnError
+func (d Dataframe) GetColumnType(columnName string) (reflect.Kind, error) {
+	columnType, ok := d.columnTypes[columnName]
+	if !ok {
+		return reflect.Int, MissingColumnError{ColumnName: columnName}
+	}
+	return columnType, nil
 }
 
 // WriteCSV is a function that takes a filename and returns an error

@@ -15,26 +15,27 @@ func FromCSV(filename string, schema Schema, hasHeader bool) (*Dataframe, error)
 		return nil, fmt.Errorf("unable to open file %s: %w", filename, err)
 	}
 	r := csv.NewReader(f)
-	if hasHeader {
-		r.Read()
-	}
 	records, err := r.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("unable to read records from %s: %w", filename, err)
 	}
-	df, err := parseCSVRecords(records, schema)
+	df, err := parseCSVRecords(records, schema, hasHeader)
 	if err != nil {
 		return nil, fmt.Errorf("error during csv record parsing: %w", err)
 	}
 	return df, nil
 }
 
-func parseCSVRecords(records [][]string, schema Schema) (*Dataframe, error) {
+func parseCSVRecords(records [][]string, schema Schema, hasHeader bool) (*Dataframe, error) {
 	df, err := schema.BuildDF()
 	if err != nil {
 		return nil, err
 	}
-	for rowNumber, record := range records {
+	recordSlice := records
+	if hasHeader {
+		recordSlice = records[1:]
+	}
+	for rowNumber, record := range recordSlice {
 		for ndx, value := range record {
 			columnName, err := schema.ColumnFromIndex(ndx)
 			if err != nil {
