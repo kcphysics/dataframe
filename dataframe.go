@@ -413,6 +413,6 @@ func (d Dataframe) WriteCSV(filename string) error {
 		return fmt.Errorf("could not open file %s for writing: %w", filename, err)
 	}
 	defer f.Close()
-	f.WriteString(table.Render())
+	f.WriteString(table.RenderCSV())
 	return nil
 }
