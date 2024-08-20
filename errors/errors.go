@@ -1,4 +1,4 @@
-package dataframe
+package errors
 
 import (
 	"fmt"

@@ -418,3 +418,8 @@ func (d Dataframe) WriteCSV(filename string) error {
 	f.WriteString(table.RenderCSV())
 	return nil
 }
+
+// NumberRows returns the number of rows that the dataframe currently has
+func (d Dataframe) NumberRows() int {
+	return d.numberRows
+}
