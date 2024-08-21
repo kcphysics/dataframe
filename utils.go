@@ -1,4 +1,4 @@
-package columns
+package dataframe
 
 import "fmt"
 

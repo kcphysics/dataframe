@@ -1,10 +1,8 @@
-package columns
+package dataframe
 
 import (
 	"fmt"
 	"reflect"
-
-	"github.com/kcphysics/dataframe/errors"
 )
 
 // FilterType allows for slicing based off of values
@@ -23,19 +21,6 @@ type Columnable interface {
 	string | float64 | int | int64
 }
 
-// ColumnInterface is an interface that expresses what
-// a column can do and can be used for
-type ColumnInterface interface {
-	ColumnType() reflect.Kind
-	ColumnName() string
-	Length() int
-	Slice(int, int) (*ColumnInterface, error)
-	GetValueAtIndex(int) (interface{}, error)
-	GetFirstIndexOfValue(interface{}) (int, bool, error)
-	Filter(FilterType, interface{}) (*ColumnInterface, error)
-	AppendValue(interface{})
-}
-
 // Column is a structure that holds data for a dataframe
 // the goal is to leave all slicing for each column
 // up to the column
@@ -50,7 +35,7 @@ type Column[T Columnable] struct {
 // will return an IndexOutOfBounds error
 func (c Column[T]) GetValueAtIndex(ndx int) (T, error) {
 	if ndx > c.Length()-1 || ndx >= c.Length() {
-		return *new(T), errors.IndexOutOfBounds{ColumnName: c.ColumnName, BrokenIndex: ndx, MaxIndex: c.Length()}
+		return *new(T), IndexOutOfBounds{c.ColumnName, ndx, c.Length()}
 	}
 	return c.data[ndx], nil
 }
