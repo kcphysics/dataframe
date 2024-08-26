@@ -3,7 +3,10 @@ package column
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
+
+	"github.com/kcphysics/dataframe/dataframeError"
 )
 
 func (c Column) meanFloat() (float64, error) {
@@ -37,4 +40,17 @@ func (c *Column) AppendFloatFromString(value string) error {
 	}
 	c.Append(val)
 	return nil
+}
+
+// Float returns the data inside of the column as an []float64, or an error if its not the
+// correct column type
+func (c Column) Float() ([]float64, error) {
+	if c.Type != reflect.Float64 {
+		return nil, &dataframeError.WrongColumnTypeError{ColumnName: c.Name, CorrectType: c.Type, CurrentType: reflect.Float64}
+	}
+	rData, ok := c.data.([]float64)
+	if !ok {
+		return nil, fmt.Errorf("unknown error, could not convert column %s to []float64", c.Name)
+	}
+	return rData, nil
 }

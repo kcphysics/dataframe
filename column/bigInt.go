@@ -3,7 +3,10 @@ package column
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
+
+	"github.com/kcphysics/dataframe/dataframeError"
 )
 
 func (c Column) meanInt64() (float64, error) {
@@ -37,4 +40,17 @@ func (c *Column) AppendInt64FromString(value string) error {
 	}
 	c.Append(val)
 	return nil
+}
+
+// BigInt returns the data inside of the column as an []int64, or an error if its not the
+// correct column type
+func (c Column) BigInt() ([]int64, error) {
+	if c.Type != reflect.Int64 {
+		return nil, &dataframeError.WrongColumnTypeError{ColumnName: c.Name, CorrectType: c.Type, CurrentType: reflect.Int64}
+	}
+	rData, ok := c.data.([]int64)
+	if !ok {
+		return nil, fmt.Errorf("unknown error, could not convert column %s to []int64", c.Name)
+	}
+	return rData, nil
 }

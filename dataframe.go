@@ -199,6 +199,16 @@ func (d Dataframe) Names() []string {
 	return d.columnOrder
 }
 
+// Column takes a column name and returns a reference to that column or an error
+// if it does not exist
+func (d Dataframe) Column(name string) (*column.Column, error) {
+	column, ok := d.columns[name]
+	if !ok {
+		return nil, &dataframeError.MissingColumnError{ColumnName: name}
+	}
+	return column, nil
+}
+
 // GetColumnType takes a column name (string) and returns the type of that
 // column.  This is useful for determining what function to use to grab a
 // Column with.  If the Column doesn't exist, it returns a &dataframeError.MissingColumnError

@@ -22,10 +22,9 @@ const (
 // is done by storing the data as an interface and then casting when
 // it is needed
 type Column struct {
-	Name   string
-	Type   reflect.Kind
-	data   interface{}
-	length int
+	Name string
+	Type reflect.Kind
+	data interface{}
 }
 
 // Length gets the columns length
@@ -183,4 +182,17 @@ func hasCorrectType(expectedType reflect.Kind, value interface{}) error {
 		}
 	}
 	return nil
+}
+
+// AsString returns the data inside of the column as an []string, or an error if its not the
+// correct column type
+func (c Column) AsString() ([]string, error) {
+	if c.Type != reflect.String {
+		return nil, &dataframeError.WrongColumnTypeError{ColumnName: c.Name, CorrectType: c.Type, CurrentType: reflect.String}
+	}
+	rData, ok := c.data.([]string)
+	if !ok {
+		return nil, fmt.Errorf("unknown error, could not convert column %s to []string", c.Name)
+	}
+	return rData, nil
 }
