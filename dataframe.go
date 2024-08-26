@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"slices"
-	"strconv"
 
 	"github.com/jedib0t/go-pretty/table"
+	"github.com/kcphysics/dataframe/column"
+	"github.com/kcphysics/dataframe/dataframeError"
 )
 
 // Dataframe is a structure that stores data in a variety of formats
@@ -15,264 +15,102 @@ import (
 // name, and actual data.  The Dataframe must have all columns of the
 // same length
 type Dataframe struct {
-	intColumns    map[string]*Column[int]
-	floatColumns  map[string]*Column[float64]
-	bigIntColumns map[string]*Column[int64]
-	stringColumns map[string]*Column[string]
-	columnTypes   map[string]reflect.Kind
-	columnOrder   []string
-	numberRows    int
+	columns     map[string]*column.Column
+	columnOrder []string
+	numberRows  int
 }
 
 // Slice will return a pointer to a new dataframe that is sliced from
 // the provided start and stop indices using the idiomatic Go slicing
 // indices
 func (d Dataframe) Slice(start, stop int) (*Dataframe, error) {
-	df := Dataframe{}
-	for _, columnName := range d.columnOrder {
-		switch d.columnTypes[columnName] {
-		case reflect.String:
-			column := d.stringColumns[columnName]
-			newColumn, err := column.Slice(start, stop)
-			if err != nil {
-				return nil, fmt.Errorf("unable to slice column %s: %w", columnName, err)
-			}
-			d.AddStringColumn(*newColumn)
-		case reflect.Int:
-			column := d.intColumns[columnName]
-			newColumn, err := column.Slice(start, stop)
-			if err != nil {
-				return nil, fmt.Errorf("unable to slice column %s: %w", columnName, err)
-			}
-			d.AddIntColumn(*newColumn)
-		case reflect.Int64:
-			column := d.bigIntColumns[columnName]
-			newColumn, err := column.Slice(start, stop)
-			if err != nil {
-				return nil, fmt.Errorf("unable to slice column %s: %w", columnName, err)
-			}
-			d.AddBigIntColumn(*newColumn)
-		case reflect.Float64:
-			column := d.floatColumns[columnName]
-			newColumn, err := column.Slice(start, stop)
-			if err != nil {
-				return nil, fmt.Errorf("unable to slice column %s: %w", columnName, err)
-			}
-			d.AddFloatColumn(*newColumn)
-		default:
-			return nil, fmt.Errorf("column %s is an unsupported type", columnName)
+	newDF := Dataframe{}
+	for colName, col := range d.columns {
+		newCol := col.Slice(start, stop)
+		err := newDF.AddColumn(newCol)
+		if err != nil {
+			return nil, fmt.Errorf("error while slicing column %s between %d and %d: %w", colName, start, stop, err)
 		}
 	}
-	return &df, nil
+	return &newDF, nil
 }
 
-// GetIntValue is a method that will fetch the integer value from
-// a specific column and a specific ndx
-func (d Dataframe) GetIntValue(columnName string, ndx int) (int, error) {
-	if !slices.Contains(d.columnOrder, columnName) {
-		return -1, MissingColumnError{columnName, reflect.Int}
-	}
-	if ndx < 0 || ndx > d.numberRows-1 {
-		return -1, IndexOutOfBounds{columnName, ndx, d.numberRows}
-	}
-	if d.columnTypes[columnName] != reflect.Int {
-		return -1, WrongColumnTypeError{columnName, reflect.Int, d.columnTypes[columnName]}
-	}
-	column := d.intColumns[columnName]
-	return column.GetValueAtIndex(ndx)
-}
-
-// GetBigIntValue is a method that will fetch the integer value from
-// a specific column and a specific index
-func (d Dataframe) GetBigIntValue(columnName string, ndx int) (int64, error) {
-	if !slices.Contains(d.columnOrder, columnName) {
-		return -1, MissingColumnError{columnName, reflect.Int64}
-	}
-	if ndx < 0 || ndx > d.numberRows-1 {
-		return -1, IndexOutOfBounds{columnName, ndx, d.numberRows}
-	}
-	if d.columnTypes[columnName] != reflect.Int64 {
-		return -1, WrongColumnTypeError{columnName, reflect.Int64, d.columnTypes[columnName]}
-	}
-	column := d.bigIntColumns[columnName]
-	return column.GetValueAtIndex(ndx)
-}
-
-// GetStringValue is a method that will fetch the integer value from
-// a specific column and a specific ndx
-func (d Dataframe) GetStringValue(columnName string, ndx int) (string, error) {
-	if !slices.Contains(d.columnOrder, columnName) {
-		return "", MissingColumnError{columnName, reflect.String}
-	}
-	if ndx < 0 || ndx > d.numberRows-1 {
-		return "", IndexOutOfBounds{columnName, ndx, d.numberRows}
-	}
-	if d.columnTypes[columnName] != reflect.String {
-		return "", WrongColumnTypeError{columnName, reflect.String, d.columnTypes[columnName]}
-	}
-	column := d.stringColumns[columnName]
-	return column.GetValueAtIndex(ndx)
-}
-
-// GetFloatValue is a method that will fetch the integer value from
-// a specific column and a specific ndx
-func (d Dataframe) GetFloatValue(columnName string, ndx int) (float64, error) {
-	if !slices.Contains(d.columnOrder, columnName) {
-		return -1, MissingColumnError{columnName, reflect.Float64}
-	}
-	if ndx < 0 || ndx > d.numberRows-1 {
-		return -1, IndexOutOfBounds{columnName, ndx, d.numberRows}
-	}
-	if d.columnTypes[columnName] != reflect.Float64 {
-		return -1, WrongColumnTypeError{columnName, reflect.Float64, d.columnTypes[columnName]}
-	}
-	column := d.floatColumns[columnName]
-	return column.GetValueAtIndex(ndx)
-}
-
-// AddIntColumn will add a column of type int to the dataframe
-// and check validity
-func (d *Dataframe) AddIntColumn(col Column[int]) error {
+// AddColumn takes a column and will add it to the dataframe. If the number of rows mismatch
+// what is currently in the dataframe, a RowCountMismatch error is returned
+func (d *Dataframe) AddColumn(column *column.Column) error {
 	if d.numberRows == 0 {
-		d.numberRows = col.Length()
+		d.numberRows = column.Length()
 	}
-	if col.Length() != d.numberRows {
-		return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
+	if d.numberRows != column.Length() {
+		return &dataframeError.RowCountMismatchError{
+			ColumnName: column.Name,
+			ShouldHave: d.numberRows,
+			DoesHave:   column.Length(),
+		}
 	}
-	if slices.Contains(d.columnOrder, col.ColumnName) {
-		return ColumnAlreadyExists{col.ColumnName}
-	}
-	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.intColumns[col.ColumnName] = &col
-	d.columnTypes[col.ColumnName] = col.ColumnType
-	return d.IsValid()
+	d.columnOrder = append(d.columnOrder, column.Name)
+	d.columns[column.Name] = column
+	return nil
 }
 
-// AddBigIntColumn will add a column of type int to the dataframe
-// and check validity
-func (d *Dataframe) AddBigIntColumn(col Column[int64]) error {
-	if d.numberRows == 0 {
-		d.numberRows = col.Length()
+// ValueAt takes a Column name and an index in that column and returns a Value
+// representing that value
+func (d Dataframe) ValueAt(columnName string, ndx int) (*column.Value, error) {
+	column, ok := d.columns[columnName]
+	if !ok {
+		return nil, &dataframeError.MissingColumnError{
+			ColumnName: columnName,
+		}
 	}
-	if col.Length() != d.numberRows {
-		return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
-	}
-	if slices.Contains(d.columnOrder, col.ColumnName) {
-		return ColumnAlreadyExists{col.ColumnName}
-	}
-	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.bigIntColumns[col.ColumnName] = &col
-	d.columnTypes[col.ColumnName] = col.ColumnType
-	return d.IsValid()
-}
-
-// AddStringColumn will add a column of type int to the dataframe
-// and check validity
-func (d *Dataframe) AddStringColumn(col Column[string]) error {
-	if d.numberRows == 0 {
-		d.numberRows = col.Length()
-	}
-	if col.Length() != d.numberRows {
-		return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
-	}
-	if slices.Contains(d.columnOrder, col.ColumnName) {
-		return ColumnAlreadyExists{col.ColumnName}
-	}
-	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.stringColumns[col.ColumnName] = &col
-	d.columnTypes[col.ColumnName] = col.ColumnType
-	return d.IsValid()
-}
-
-// AddStringColumn will add a column of type int to the dataframe
-// and check validity
-func (d *Dataframe) AddFloatColumn(col Column[float64]) error {
-	if d.numberRows == 0 {
-		d.numberRows = col.Length()
-	}
-	if col.Length() != d.numberRows {
-		return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
-	}
-	if slices.Contains(d.columnOrder, col.ColumnName) {
-		return ColumnAlreadyExists{col.ColumnName}
-	}
-	d.columnOrder = append(d.columnOrder, col.ColumnName)
-	d.floatColumns[col.ColumnName] = &col
-	d.columnTypes[col.ColumnName] = col.ColumnType
-	return d.IsValid()
+	return column.Value(ndx)
 }
 
 // IsValid determines if all columns are the same length, returning
 // an error if they are not all the same length
 func (d *Dataframe) IsValid() error {
-	for _, col := range d.intColumns {
+	for _, column := range d.columns {
 		if d.numberRows == 0 {
-			d.numberRows = col.Length()
+			d.numberRows = column.Length()
 		}
-		if col.Length() != d.numberRows {
-			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
-		}
-	}
-	for _, col := range d.floatColumns {
-		if d.numberRows == 0 {
-			d.numberRows = col.Length()
-		}
-		if col.Length() != d.numberRows {
-			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
-		}
-	}
-	for _, col := range d.bigIntColumns {
-		if d.numberRows == 0 {
-			d.numberRows = col.Length()
-		}
-		if col.Length() != d.numberRows {
-			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
-		}
-	}
-	for _, col := range d.stringColumns {
-		if d.numberRows == 0 {
-			d.numberRows = col.Length()
-		}
-		if col.Length() != d.numberRows {
-			return RowCountMismatchError{col.ColumnName, d.numberRows, col.Length()}
+		if column.Length() != d.numberRows {
+			return &dataframeError.RowCountMismatchError{
+				ColumnName: column.Name,
+				ShouldHave: d.numberRows,
+				DoesHave:   column.Length(),
+			}
 		}
 	}
 	return nil
 }
 
-// ParseValue takes a columnName and a string value and appends it
+// AppendTo takes a Column name and a value and appends it.  This will
+// return an error if the passed in value is not the same tyoe as the
+// column
+func (d *Dataframe) AppendTo(columnName string, value interface{}) error {
+	column, ok := d.columns[columnName]
+	if !ok {
+		return &dataframeError.MissingColumnError{ColumnName: columnName}
+	}
+	return column.Append(value)
+}
+
+// AppendFromString takes a columnName and a string value and appends it
 // to that column.  This will return an error if the string cannot
 // be converted
-func (d *Dataframe) ParseValue(columnName, value string) error {
-	colType, ok := d.columnTypes[columnName]
+func (d *Dataframe) AppendFromString(columnName, value string) error {
+	column, ok := d.columns[columnName]
 	if !ok {
-		return fmt.Errorf("column %s does not exist", columnName)
+		return &dataframeError.MissingColumnError{ColumnName: columnName}
 	}
-	switch colType {
+	switch column.Type {
 	case reflect.String:
-		col := d.stringColumns[columnName]
-		col.AppendValue(value)
+		return column.AppendString(value)
 	case reflect.Int:
-		col := d.intColumns[columnName]
-		val, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("unable to parse %s into Int", value)
-		}
-		col.AppendValue(val)
+		return column.AppendIntFromString(value)
 	case reflect.Int64:
-		col := d.bigIntColumns[columnName]
-		val, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("unable to parse %s into Int64", value)
-		}
-		col.AppendValue(val)
+		return column.AppendInt64FromString(value)
 	case reflect.Float64:
-		col := d.floatColumns[columnName]
-		val, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return fmt.Errorf("unable to parse %s into Float64", value)
-		}
-		col.AppendValue(val)
+		return column.AppendFloatFromString(value)
 	}
 	return nil
 }
@@ -281,13 +119,9 @@ func (d *Dataframe) ParseValue(columnName, value string) error {
 // that need to be initialized for use
 func New() *Dataframe {
 	return &Dataframe{
-		numberRows:    0,
-		intColumns:    make(map[string]*Column[int]),
-		stringColumns: make(map[string]*Column[string]),
-		bigIntColumns: make(map[string]*Column[int64]),
-		floatColumns:  make(map[string]*Column[float64]),
-		columnTypes:   make(map[string]reflect.Kind),
-		columnOrder:   []string{},
+		numberRows:  0,
+		columns:     make(map[string]*column.Column),
+		columnOrder: []string{},
 	}
 }
 
@@ -302,39 +136,12 @@ func (d Dataframe) createHeader(columnCount int) []interface{} {
 func (d Dataframe) createRowFromNdx(ndx, columnCount int) ([]interface{}, error) {
 	var row []interface{}
 	for _, columnName := range d.columnOrder[:columnCount] {
-		colType := d.columnTypes[columnName]
-		switch colType {
-		case reflect.String:
-			col := d.stringColumns[columnName]
-			val, err := col.GetValueAtIndex(ndx)
-			if err != nil {
-				return nil, err
-			}
-			row = append(row, val)
-		case reflect.Int:
-			col := d.intColumns[columnName]
-			val, err := col.GetValueAtIndex(ndx)
-			if err != nil {
-				return nil, err
-			}
-			row = append(row, val)
-		case reflect.Int64:
-			col := d.bigIntColumns[columnName]
-			val, err := col.GetValueAtIndex(ndx)
-			if err != nil {
-				return nil, err
-			}
-			row = append(row, val)
-		case reflect.Float64:
-			col := d.floatColumns[columnName]
-			val, err := col.GetValueAtIndex(ndx)
-			if err != nil {
-				return nil, err
-			}
-			row = append(row, val)
-		default:
-			return nil, UnsupportedType{colType}
+		column := d.columns[columnName]
+		val, err := column.Value(ndx)
+		if err != nil {
+			return nil, err
 		}
+		row = append(row, val.Interface())
 	}
 	return row, nil
 }
@@ -394,13 +201,13 @@ func (d Dataframe) Names() []string {
 
 // GetColumnType takes a column name (string) and returns the type of that
 // column.  This is useful for determining what function to use to grab a
-// Column with.  If the Column doesn't exist, it returns a MissingColumnError
+// Column with.  If the Column doesn't exist, it returns a &dataframeError.MissingColumnError
 func (d Dataframe) GetColumnType(columnName string) (reflect.Kind, error) {
-	columnType, ok := d.columnTypes[columnName]
+	column, ok := d.columns[columnName]
 	if !ok {
-		return reflect.Int, MissingColumnError{ColumnName: columnName}
+		return reflect.Int, &dataframeError.MissingColumnError{ColumnName: columnName}
 	}
-	return columnType, nil
+	return column.Type, nil
 }
 
 // WriteCSV is a function that takes a filename and returns an error
@@ -417,4 +224,11 @@ func (d Dataframe) WriteCSV(filename string) error {
 	defer f.Close()
 	f.WriteString(table.RenderCSV())
 	return nil
+}
+
+func getMin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

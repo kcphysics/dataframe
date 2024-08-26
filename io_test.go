@@ -55,46 +55,62 @@ func createTestCSV(name string) (string, string, error) {
 }
 
 func testStringHelper(t *testing.T, columnName string, ndx int, expectedValue string, df *Dataframe) {
-	actualValue, err := df.GetStringValue(columnName, ndx)
+	actualValue, err := df.ValueAt(columnName, ndx)
 	if err != nil {
 		t.Fatalf("unable to get index %d from column %s", ndx, columnName)
 		return
 	}
-	if actualValue != expectedValue {
-		t.Errorf("expected %s but found %s from index %d for column %s", expectedValue, actualValue, ndx, columnName)
+	actualString, err := actualValue.AsString()
+	if err != nil {
+		t.Fatalf("unable to get string from value %v: %s", actualValue.Interface(), err)
+	}
+	if actualString != expectedValue {
+		t.Errorf("expected %s but found %s from index %d for column %s", expectedValue, actualString, ndx, columnName)
 	}
 }
 
 func testIntHelper(t *testing.T, columnName string, ndx int, expectedValue int, df *Dataframe) {
-	actualValue, err := df.GetIntValue(columnName, ndx)
+	actualValue, err := df.ValueAt(columnName, ndx)
 	if err != nil {
 		t.Fatalf("unable to get index %d from column %s", ndx, columnName)
 		return
 	}
-	if actualValue != expectedValue {
-		t.Errorf("expected %d but found %d from index %d for column %s", expectedValue, actualValue, ndx, columnName)
+	actualInt, err := actualValue.Int()
+	if err != nil {
+		t.Fatalf("unable to get int from value %s: %s", actualValue.Interface(), err)
+	}
+	if actualInt != expectedValue {
+		t.Errorf("expected %d but found %d from index %d for column %s", expectedValue, actualInt, ndx, columnName)
 	}
 }
 
 func testBigIntHelper(t *testing.T, columnName string, ndx int, expectedValue int64, df *Dataframe) {
-	actualValue, err := df.GetBigIntValue(columnName, ndx)
+	actualValue, err := df.ValueAt(columnName, ndx)
 	if err != nil {
 		t.Fatalf("unable to get index %d from column %s", ndx, columnName)
 		return
 	}
-	if actualValue != expectedValue {
-		t.Errorf("expected %d but found %d from index %d for column %s", expectedValue, actualValue, ndx, columnName)
+	actualBigInt, err := actualValue.Int64()
+	if err != nil {
+		t.Fatalf("unable to get int64 from value %s: %s", actualValue.Interface(), err)
+	}
+	if actualBigInt != expectedValue {
+		t.Errorf("expected %d but found %d from index %d for column %s", expectedValue, actualBigInt, ndx, columnName)
 	}
 }
 
 func testFloatHelper(t *testing.T, columnName string, ndx int, expectedValue float64, df *Dataframe) {
-	actualValue, err := df.GetFloatValue(columnName, ndx)
+	actualValue, err := df.ValueAt(columnName, ndx)
 	if err != nil {
 		t.Fatalf("unable to get index %d from column %s", ndx, columnName)
 		return
 	}
-	if actualValue != expectedValue {
-		t.Errorf("expected %f but found %f from index %d for column %s", expectedValue, actualValue, ndx, columnName)
+	actualFloat, err := actualValue.Float()
+	if err != nil {
+		t.Fatalf("unable to get float64 from value %s: %s", actualValue.Interface(), err)
+	}
+	if actualFloat != expectedValue {
+		t.Errorf("expected %f but found %f from index %d for column %s", expectedValue, actualFloat, ndx, columnName)
 	}
 }
 

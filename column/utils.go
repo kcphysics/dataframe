@@ -1,4 +1,4 @@
-package dataframe
+package column
 
 import "fmt"
 
@@ -35,11 +35,4 @@ func getBoundsForFilter(operation FilterType, ndx, length int) (int, int) {
 		return ndx - 1, ndx
 	}
 	return -1, -1
-}
-
-func getMin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

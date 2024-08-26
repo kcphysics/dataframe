@@ -41,7 +41,7 @@ func parseCSVRecords(records [][]string, schema Schema, hasHeader bool) (*Datafr
 			if err != nil {
 				return nil, err
 			}
-			err = df.ParseValue(columnName, value)
+			err = df.AppendFromString(columnName, value)
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse column %d on row %d: %w", ndx, rowNumber, err)
 			}

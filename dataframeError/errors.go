@@ -1,4 +1,4 @@
-package dataframe
+package dataframeError
 
 import (
 	"fmt"
@@ -58,4 +58,21 @@ type IndexOutOfBounds struct {
 
 func (i IndexOutOfBounds) Error() string {
 	return fmt.Sprintf("requested index %d is out of bounds for column %s which has max index %d", i.BrokenIndex, i.ColumnName, i.MaxIndex)
+}
+
+type WrongType struct {
+	GivenType    reflect.Kind
+	ExpectedType reflect.Kind
+}
+
+func (w WrongType) Error() string {
+	return fmt.Sprintf("expected type %s but found type %s", w.ExpectedType, w.GivenType)
+}
+
+type NotNumericColumn struct {
+	Name, Operation string
+}
+
+func (n NotNumericColumn) Error() string {
+	return fmt.Sprintf("column %s is not a numeric type and does not support operation %s", n.Name, n.Operation)
 }

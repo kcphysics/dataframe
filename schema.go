@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+
+	"github.com/kcphysics/dataframe/column"
+	"github.com/kcphysics/dataframe/dataframeError"
 )
 
 // SchemaDef is a type that contains column name and type
@@ -32,7 +35,7 @@ func (s Schema) isAllowedType(columnType reflect.Kind) bool {
 // in the schema
 func (s *Schema) AddColumn(columnName string, columnType reflect.Kind) error {
 	if !s.isAllowedType(columnType) {
-		return UnsupportedType{ColumnType: columnType}
+		return dataframeError.UnsupportedType{ColumnType: columnType}
 	}
 	s.columnOrder = append(s.columnOrder, columnName)
 	s.columnType = append(s.columnType, columnType)
@@ -83,34 +86,11 @@ func (s Schema) BuildDF() (*Dataframe, error) {
 	df := New()
 	for ndx, columnName := range s.columnOrder {
 		columnType := s.columnType[ndx]
-		switch columnType {
-		case reflect.String:
-			col, err := NewColumn[string](columnName, []string{})
-			if err != nil {
-				return nil, err
-			}
-			df.AddStringColumn(*col)
-		case reflect.Int:
-			col, err := NewColumn[int](columnName, []int{})
-			if err != nil {
-				return nil, err
-			}
-			df.AddIntColumn(*col)
-		case reflect.Int64:
-			col, err := NewColumn[int64](columnName, []int64{})
-			if err != nil {
-				return nil, err
-			}
-			df.AddBigIntColumn(*col)
-		case reflect.Float64:
-			col, err := NewColumn[float64](columnName, []float64{})
-			if err != nil {
-				return nil, err
-			}
-			df.AddFloatColumn(*col)
-		default:
-			return nil, UnsupportedType{ColumnType: columnType}
+		col, err := column.New(columnType, columnName, nil)
+		if err != nil {
+			return nil, fmt.Errorf("error while creating column %s of type %s: %w", columnName, columnType, err)
 		}
+		df.AddColumn(col)
 	}
 	return df, nil
 }
@@ -119,7 +99,7 @@ func (s Schema) BuildDF() (*Dataframe, error) {
 // and errors otherwise
 func (s Schema) ColumnFromIndex(ndx int) (string, error) {
 	if ndx < 0 || ndx > len(s.columnOrder)-1 {
-		return "", IndexOutOfBounds{"NA", ndx, len(s.columnOrder)}
+		return "", dataframeError.IndexOutOfBounds{ColumnName: "NA", BrokenIndex: ndx, MaxIndex: len(s.columnOrder)}
 	}
 	return s.columnOrder[ndx], nil
 }
