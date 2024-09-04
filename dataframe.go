@@ -2,6 +2,7 @@ package dataframe
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 
@@ -115,14 +116,56 @@ func (d *Dataframe) AppendFromString(columnName, value string) error {
 	return nil
 }
 
-// New is the dataframe constructor, as there are complex data types
-// that need to be initialized for use
-func New() *Dataframe {
-	return &Dataframe{
-		numberRows:  0,
-		columns:     make(map[string]*column.Column),
-		columnOrder: []string{},
+// MapStruct takes a reference to a Struct and an Index and fill the struct with
+// the data from columns of the same name.  If columns don't exist, they will be skipped.
+// Error is returned in case of problems during mapping
+func (d Dataframe) MapStruct(holder interface{}, ndx int) error {
+	dataMap, err := d.createMapFromNdx(ndx)
+	if err != nil {
+		return err
 	}
+	value := reflect.ValueOf(holder)
+	elem := value.Elem()
+	for i := 0; i < elem.NumField(); i++ {
+		field := elem.Field(i)
+		structField := elem.Type().Field(i)
+		if !field.CanSet() {
+			return fmt.Errorf("unable to set field %s", structField.Name)
+		}
+		val, ok := dataMap[structField.Name]
+		if !ok {
+			continue
+		}
+		switch structField.Type.Kind() {
+		case reflect.String:
+			v, ok := val.(string)
+			if !ok {
+				return fmt.Errorf("cannot convert value %v to string for column %s", val, structField.Name)
+			}
+			field.SetString(v)
+		case reflect.Int:
+			v, ok := val.(int)
+			if !ok {
+				return fmt.Errorf("cannot convert value %v to Int for column %s", val, structField.Name)
+			}
+			field.SetInt(int64(v))
+		case reflect.Int64:
+			v, ok := val.(int64)
+			if !ok {
+				return fmt.Errorf("cannot convert value %v to Int64 for column %s", val, structField.Name)
+			}
+			field.SetInt(v)
+		case reflect.Float64:
+			v, ok := val.(float64)
+			if !ok {
+				return fmt.Errorf("cannot convert value %v to Float64 for column %s", val, structField.Name)
+			}
+			field.SetFloat(v)
+		default:
+			log.Printf("Can't determine fields set method: %s", structField.Name)
+		}
+	}
+	return nil
 }
 
 func (d Dataframe) createHeader(columnCount int) []interface{} {
@@ -131,6 +174,22 @@ func (d Dataframe) createHeader(columnCount int) []interface{} {
 		row = append(row, columnName)
 	}
 	return row
+}
+
+func (d Dataframe) createMapFromNdx(ndx int) (map[string]interface{}, error) {
+	if ndx < 0 || ndx > d.Length()-1 {
+		return nil, dataframeError.IndexOutOfBounds{MaxIndex: d.Length() - 1, BrokenIndex: ndx}
+	}
+	rowMap := make(map[string]interface{})
+	for _, columnName := range d.columnOrder {
+		column := d.columns[columnName]
+		value, err := column.Value(ndx)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get value for column %s at ndx %d: %w", columnName, ndx, err)
+		}
+		rowMap[columnName] = value.Interface()
+	}
+	return rowMap, nil
 }
 
 func (d Dataframe) createRowFromNdx(ndx, columnCount int) ([]interface{}, error) {
@@ -241,4 +300,53 @@ func getMin(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// SelectForIndices takes a list of column Names and a list of indices
+// and creates a new dataframe from those
+func (df Dataframe) SelectForIndices(columnNames []string, indices []int) (*Dataframe, error) {
+	returnDf := New()
+	for _, column := range columnNames {
+		col, ok := df.columns[column]
+		if !ok {
+			return nil, dataframeError.MissingColumnError{ColumnName: column}
+		}
+		newCol, err := col.Indices(indices)
+		if err != nil {
+			return nil, fmt.Errorf("cannot get indices for column %s: %w", col.Name, err)
+		}
+		err = returnDf.AddColumn(newCol)
+		if err != nil {
+			return nil, fmt.Errorf("cannot add new column %s: %w", col.Name, err)
+		}
+	}
+	return returnDf, nil
+}
+
+// Concatenate takes a pointer to a dataframe and then concatenates each column
+// in the provided dataframe to this dataframe.  This will return an error if the columns are
+// not exactly the same in type or name.
+func (df *Dataframe) Concatenate(df2 *Dataframe) error {
+	for columnName, column := range df.columns {
+		column2, ok := df2.columns[columnName]
+		if !ok {
+			return &dataframeError.MissingColumnError{ColumnName: columnName, Type: column.Type}
+		}
+		err := column.Concatenate(column2)
+		if err != nil {
+			return err
+		}
+		df.numberRows = column.Length()
+	}
+	return nil
+}
+
+// New is the dataframe constructor, as there are complex data types
+// that need to be initialized for use
+func New() *Dataframe {
+	return &Dataframe{
+		numberRows:  0,
+		columns:     make(map[string]*column.Column),
+		columnOrder: []string{},
+	}
 }

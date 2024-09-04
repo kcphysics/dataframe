@@ -24,9 +24,9 @@ func (c Column) stdDevFloat() (float64, error) {
 		return -1, err
 	}
 	sum := float64(0)
-	data := c.data.([]int)
+	data := c.data.([]float64)
 	for _, v := range data {
-		sum += (float64(v) - mean)
+		sum += math.Pow((float64(v) - mean), 2)
 	}
 	variance := sum / float64(len(data))
 	return math.Sqrt(variance), nil
@@ -53,4 +53,21 @@ func (c Column) Float() ([]float64, error) {
 		return nil, fmt.Errorf("unknown error, could not convert column %s to []float64", c.Name)
 	}
 	return rData, nil
+}
+
+func (c Column) floatIndices(indices []int) (*Column, error) {
+	newData := []float64{}
+	data := c.data.([]float64)
+	for _, ndx := range indices {
+		err := c.checkBounds(ndx)
+		if err != nil {
+			return nil, err
+		}
+		newData = append(newData, data[ndx])
+	}
+	return &Column{
+		Name: c.Name,
+		Type: c.Type,
+		data: newData,
+	}, nil
 }

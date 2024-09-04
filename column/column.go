@@ -56,6 +56,22 @@ func (c Column) Slice(start, stop int) *Column {
 	}
 }
 
+// Indices will return a new Column with just the selected Indices
+func (c Column) Indices(indices []int) (*Column, error) {
+	switch c.Type {
+	case reflect.String:
+		return c.stringIndices(indices)
+	case reflect.Int:
+		return c.intIndices(indices)
+	case reflect.Int64:
+		return c.bigIntIndices(indices)
+	case reflect.Float64:
+		return c.floatIndices(indices)
+	default:
+		return nil, dataframeError.UnsupportedType{ColumnType: c.Type}
+	}
+}
+
 // Value takes an index and returns a Value.  To get the actual
 // value, you'll need to use Value's type methods
 func (c Column) Value(ndx int) (*Value, error) {
@@ -118,6 +134,24 @@ func (c Column) checkBounds(ndx int) error {
 			MaxIndex:    c.Length() - 1,
 		}
 	}
+	return nil
+}
+
+// Concatenate takes a column and will append the data in the new column
+// to the existing column.  This will mutate the existing column.  This will error if
+//  1. The Column Names are not the same
+//  2. The Column Types are not the same
+func (c *Column) Concatenate(newCol *Column) error {
+	if c.Type != newCol.Type {
+		return &dataframeError.WrongColumnTypeError{ColumnName: c.Name, CorrectType: c.Type, CurrentType: newCol.Type}
+	}
+	if c.Name != newCol.Name {
+		return fmt.Errorf("expected column name of %s, but got %s, which is not compatible", c.Name, newCol.Name)
+	}
+	c1 := reflect.ValueOf(c.data)
+	c2 := reflect.ValueOf(newCol.data)
+	newColValue := reflect.AppendSlice(c1, c2)
+	c.data = newColValue.Interface()
 	return nil
 }
 
@@ -195,4 +229,21 @@ func (c Column) AsString() ([]string, error) {
 		return nil, fmt.Errorf("unknown error, could not convert column %s to []string", c.Name)
 	}
 	return rData, nil
+}
+
+func (c Column) stringIndices(indices []int) (*Column, error) {
+	newData := []string{}
+	data := c.data.([]string)
+	for _, ndx := range indices {
+		err := c.checkBounds(ndx)
+		if err != nil {
+			return nil, err
+		}
+		newData = append(newData, data[ndx])
+	}
+	return &Column{
+		Name: c.Name,
+		Type: c.Type,
+		data: newData,
+	}, nil
 }

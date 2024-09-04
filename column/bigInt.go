@@ -24,9 +24,9 @@ func (c Column) stdDevInt64() (float64, error) {
 		return -1, err
 	}
 	sum := float64(0)
-	data := c.data.([]int)
+	data := c.data.([]int64)
 	for _, v := range data {
-		sum += (float64(v) - mean)
+		sum += math.Pow((float64(v) - mean), 2)
 	}
 	variance := sum / float64(len(data))
 	return math.Sqrt(variance), nil
@@ -53,4 +53,21 @@ func (c Column) BigInt() ([]int64, error) {
 		return nil, fmt.Errorf("unknown error, could not convert column %s to []int64", c.Name)
 	}
 	return rData, nil
+}
+
+func (c Column) bigIntIndices(indices []int) (*Column, error) {
+	newData := []int64{}
+	data := c.data.([]int64)
+	for _, ndx := range indices {
+		err := c.checkBounds(ndx)
+		if err != nil {
+			return nil, err
+		}
+		newData = append(newData, data[ndx])
+	}
+	return &Column{
+		Name: c.Name,
+		Type: c.Type,
+		data: newData,
+	}, nil
 }

@@ -26,7 +26,7 @@ func (c Column) stdDevInt() (float64, error) {
 	sum := float64(0)
 	data := c.data.([]int)
 	for _, v := range data {
-		sum += (float64(v) - mean)
+		sum += math.Pow((float64(v) - mean), 2)
 	}
 	variance := sum / float64(len(data))
 	return math.Sqrt(variance), nil
@@ -53,4 +53,21 @@ func (c Column) Int() ([]int, error) {
 		return nil, fmt.Errorf("unknown error, could not convert column %s to []int", c.Name)
 	}
 	return rData, nil
+}
+
+func (c Column) intIndices(indices []int) (*Column, error) {
+	newData := []int{}
+	data := c.data.([]int)
+	for _, ndx := range indices {
+		err := c.checkBounds(ndx)
+		if err != nil {
+			return nil, err
+		}
+		newData = append(newData, data[ndx])
+	}
+	return &Column{
+		Name: c.Name,
+		Type: c.Type,
+		data: newData,
+	}, nil
 }
